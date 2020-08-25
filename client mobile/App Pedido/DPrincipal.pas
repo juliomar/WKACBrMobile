@@ -5,13 +5,15 @@ interface
 uses
   MVCFramework.RESTClient,
   System.Threading,
+  System.Permissions,
 
   System.SysUtils, System.Classes, FireDAC.Stan.Intf, FireDAC.Stan.Option,
   FireDAC.Stan.Error, FireDAC.UI.Intf, FireDAC.Phys.Intf, FireDAC.Stan.Def,
   FireDAC.Stan.Pool, FireDAC.Stan.Async, FireDAC.Phys, FireDAC.FMXUI.Wait,
   Data.DB, FireDAC.Comp.Client, FireDAC.Phys.SQLite, FireDAC.Phys.SQLiteDef,
   FireDAC.Stan.ExprFuncs, FireDAC.Stan.Param, FireDAC.DatS, FireDAC.DApt.Intf,
-  FireDAC.Comp.DataSet, FireDAC.DApt;
+  FireDAC.Comp.DataSet, FireDAC.DApt, FireDAC.FMXUI.Login, FireDAC.FMXUI.Error,
+  FireDAC.Comp.UI;
 
 type
   TDtmPrincipal = class(TDataModule)
@@ -38,6 +40,10 @@ type
     qryClientesid: TIntegerField;
     qryClientesnome: TStringField;
     qryClientescpf: TStringField;
+    FDGUIxLoginDialog1: TFDGUIxLoginDialog;
+    FDGUIxWaitCursor1: TFDGUIxWaitCursor;
+    FDGUIxErrorDialog1: TFDGUIxErrorDialog;
+    FDPhysSQLiteDriverLink1: TFDPhysSQLiteDriverLink;
     procedure FDConnection1BeforeConnect(Sender: TObject);
     procedure tmpProdutosAfterOpen(DataSet: TDataSet);
     procedure tmpClientesAfterOpen(DataSet: TDataSet);
@@ -45,12 +51,11 @@ type
   private
     FCli: TRESTClient;
     FResp: IRESTResponse;
+    function GetCli: TRESTClient;
   public
-    procedure InicializarRESTClient;
-
     procedure GetPDFFromNFCe(const ANumero, ASerie: integer);
 
-    property Cli: TRESTClient read FCli write FCli;
+    property Cli: TRESTClient read GetCli;
     property Resp: IRESTResponse read FResp write FResp;
   end;
 
@@ -78,9 +83,10 @@ uses
   System.IOUtils,
   MVCFramework.DataSet.Utils,
   UConfigClass,
-  FMX.DialogService.Async;
+  FMX.DialogService,
+  FMX.Dialogs;
 
-procedure TDtmPrincipal.InicializarRESTClient;
+function TDtmPrincipal.GetCli: TRESTClient;
 begin
   if Assigned(FCli) then
     FCli.DisposeOf;
@@ -91,23 +97,25 @@ begin
 
   FCli.Username := 'admin';
   FCli.Password := 'adminpass';
+
+  Result := FCli;
 end;
 
 procedure TDtmPrincipal.tmpClientesAfterOpen(DataSet: TDataSet);
 var
   FutResponse: IFuture<string>;
 begin
-  //consumo assincrono
-  InicializarRESTClient;
-
+  //consumo assincrono (FORMA PREFERENCIAL)
   FutResponse := TTask.Future<string>(
     function: string
+    var
+      Response: IRESTResponse;
     begin
-      FResp := Cli.doGET('/nfce/clientes', []);
-      if FResp.HasError then
+      Response := Cli.doGET('/nfce/clientes', []);
+      if Response.HasError then
         raise Exception.Create(FResp.ResponseText);
 
-      Result := FResp.BodyAsString;
+      Result := Response.BodyAsString;
     end);
 
   DataSet.DisableControls;
@@ -122,8 +130,7 @@ end;
 procedure TDtmPrincipal.tmpProdutosAfterOpen(DataSet: TDataSet);
 begin
   // comsumo sincrono
-  InicializarRESTClient;
-
+  //(NUNCA FAZER ASSIM, AQUI ESTÁ MERAMENTE PARA EFEITO EDUCACIONAL)
   FResp := Cli.doGET('/nfce/produtos', []);
   if FResp.HasError then
     raise Exception.Create(FResp.ResponseText);
@@ -183,7 +190,8 @@ end;
 
 procedure TDtmPrincipal.FDConnection1BeforeConnect(Sender: TObject);
 begin
-  FDConnection1.Params.Values['Database'] := TPath.Combine(TPath.GetDocumentsPath, 'AppPedidos.sqlite');
+  FDConnection1.Params.Values['Database'] :=
+    TPath.Combine(TPath.GetDocumentsPath, 'AppPedidos.sqlite');
 end;
 
 procedure TDtmPrincipal.GetPDFFromNFCe(const ANumero, ASerie: integer);
@@ -192,25 +200,34 @@ var
   PathFilePDF: string;
   {$IFDEF ANDROID}
   Intent: JIntent;
-  URIArquivo: JParcelable;
   {$ENDIF}
+  FutStream: IFuture<TStream>;
 begin
-  FResp := Cli.doGET('/nfce/nfce', [ANumero.ToString, ASerie.ToString, 'PDF']);
-  if Resp.HasError then
-    raise Exception.Create(FResp.ResponseText);
+  FutStream := TTask.Future<TStream>(
+    function: TStream
+    var
+      Response: IRESTResponse;
+    begin
+      Response := Cli.doGET('/nfce/nfce', [ANumero.ToString, ASerie.ToString, 'PDF']);
+      if Response.HasError then
+        raise Exception.Create(FResp.ResponseText);
+
+      Result := Response.Body;
+    end);
 
   //caminho do arquivo baixado
-  PathFilePDF := TPath.Combine(
-    TPath.GetSharedDocumentsPath,
-    Format('nf%9.9d%3.3d.pdf', [ANumero, ASerie])
-  );
-  if System.SysUtils.FileExists(PathFilePDF) then
-    System.SysUtils.DeleteFile(PathFilePDF);
+//  PathFilePDF := TPath.Combine(
+//    TPath.GetSharedDocumentsPath,
+//    Format('nf%9.9d%3.3d.pdf', [ANumero, ASerie])
+//  );
+  PathFilePDF := TPath.Combine(TPath.GetSharedDocumentsPath, 'notafiscal.pdf');
+  if TFile.Exists(PathFilePDF) then
+    TFile.Delete(PathFilePDF);
 
   // salvar arquivo pdf local
   PDFStream := TMemoryStream.Create;
   try
-    PDFStream.LoadFromStream(FResp.Body);
+    PDFStream.LoadFromStream(FutStream.Value);
     PDFStream.Position := 0;
     PDFStream.SaveToFile(PathFilePDF);
 
@@ -218,23 +235,15 @@ begin
     if FileExists(PathFilePDF) then
     begin
       {$IFDEF ANDROID}
-      URIArquivo := JParcelable(
-        TJNet_Uri.JavaClass.fromFile(
-          TJFile.JavaClass.init(StringToJString(PathFilePDF))
-        )
-      );
-
       // visualizar pdf
       Intent := TJIntent.Create;
-      Intent.setType(StringToJString('application/pdf'));
       Intent.setAction(TJIntent.JavaClass.ACTION_VIEW);
-      Intent.putExtra(TJIntent.JavaClass.EXTRA_STREAM, URIArquivo);
+      Intent.setDataAndType(StrToJURI('file://' + PathFilePDF), StringToJString('application/pdf'));
 
       // compartilhar
 //      Intent := TJIntent.Create;
-//      Intent.setType(StringToJString('application/pdf'));
 //      Intent.setAction(TJIntent.JavaClass.ACTION_MEDIA_SHARED);
-//      Intent.putExtra(TJIntent.JavaClass.EXTRA_STREAM, URIArquivo);
+//      Intent.setDataAndType(StrToJURI('file://' + PathFilePDF), StringToJString('application/pdf'));
 
       try
         TAndroidHelper.Activity.startActivity(Intent);

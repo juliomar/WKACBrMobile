@@ -45,8 +45,8 @@ type
   private
 
   public
-    procedure Inicilizar;
     procedure Limpar;
+    procedure Inicializar;
     procedure EnviarPedido;
   end;
 
@@ -58,7 +58,7 @@ uses DPrincipal, UNFCeClass;
 
 { TFramePedido }
 
-procedure TFramePedido.Inicilizar;
+procedure TFramePedido.Inicializar;
 begin
   Self.Limpar;
 
@@ -71,8 +71,8 @@ end;
 
 procedure TFramePedido.Limpar;
 begin
-  EdtClienteNome.Text := '';
-  EdtClienteCPF.Text  := '';
+  EdtClienteNome.Text := EmptyStr;
+  EdtClienteCPF.Text  := EmptyStr;
 
   TmpItensPedido.Close;
   TmpItensPedido.CreateDataSet;
@@ -88,7 +88,7 @@ begin
     raise Exception.Create('Nenhum produto informado!');
   end;
 
-  if StrToInt(EdtQuantidade.Text) <= 0 then
+  if EdtQuantidade.Text.ToInteger <= 0 then
   begin
     EdtQuantidade.SetFocus;
     raise Exception.Create('Informe um valor maior que zero para quantidade!');
@@ -100,6 +100,16 @@ begin
     StrToInt(EdtQuantidade.Text),
     DtmPrincipal.qryProdutosVL_VENDA.AsFloat
   ]);
+  {
+  OU
+
+  TmpItensPedido.Append;
+  TmpItensPedidoId         := DtmPrincipal.qryProdutosID.AsInteger;
+  TmpItensPedidoDescricao  := DtmPrincipal.qryProdutosDESCRICAO.AsString;
+  TmpItensPedidoQuantidade := StrToInt(EdtQuantidade.Text);
+  TmpItensPedidoValorVenda := DtmPrincipal.qryProdutosVL_VENDA.AsFloat;
+  TmpItensPedido.Post;
+  }
 end;
 
 procedure TFramePedido.EnviarPedido;
@@ -128,7 +138,6 @@ begin
       TmpItensPedido.Next;
     end;
 
-    DtmPrincipal.InicializarRESTClient;
     DtmPrincipal.Resp := DtmPrincipal.Cli
                             .Resource('/nfce/nfce')
                             .doPOST<TNFCe>(oPedido, False);

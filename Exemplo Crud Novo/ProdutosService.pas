@@ -20,7 +20,7 @@ type
   private
 
   public
-    class function GetProdutos: TObjectList<TProduto>;
+    class function GetProdutos(const ALikeDescricao: string): TObjectList<TProduto>;
     class function GetProduto(const ACodProduto: Integer): TProduto;
     class procedure Post(const AProduto: TProduto);
     class procedure Update(const AId: Integer; const AProduto: TProduto);
@@ -39,6 +39,7 @@ begin
   FDConexao := TFDConnection.Create(nil);
   try
     FDConexao.ConnectionDefName := NOME_CONEXAO_FB;
+
     CountDelete := FDConexao.ExecSQL(
       'delete from produtos where ID=?',
       [ACodProduto],
@@ -62,6 +63,7 @@ begin
   FDConexao := TFDConnection.Create(nil);
   try
     FDConexao.ConnectionDefName := NOME_CONEXAO_FB;
+
     FDConexao.ExecSQL(
       'select * from produtos where ID=' + ACodProduto.ToString,
       TmpDataset
@@ -69,11 +71,11 @@ begin
 
     if not TmpDataset.IsEmpty then
     begin
-      Result.Id := TmpDataset.FieldByName('ID').AsInteger;
-      Result.Gtin :=  TmpDataset.FieldByName('GTIN').AsString;
-      Result.Descricao := TmpDataset.FieldByName('DESCRICAO').AsString;
-      Result.ValorVenda := TmpDataset.FieldByName('VL_VENDA').AsCurrency;
-      Result.Unidade := TmpDataset.FieldByName('UN').AsString;
+      Result.Id          := TmpDataset.FieldByName('ID').AsInteger;
+      Result.Gtin        := TmpDataset.FieldByName('GTIN').AsString;
+      Result.Descricao   := TmpDataset.FieldByName('DESCRICAO').AsString;
+      Result.ValorVenda  := TmpDataset.FieldByName('VL_VENDA').AsCurrency;
+      Result.Unidade     := TmpDataset.FieldByName('UN').AsString;
       Result.DataCriacao := TmpDataset.FieldByName('DT_CRIACAO').AsDateTime;
     end
     else
@@ -84,18 +86,24 @@ begin
   end;
 end;
 
-class function TProdutoService.GetProdutos: TObjectList<TProduto>;
+class function TProdutoService.GetProdutos(const ALikeDescricao: string): TObjectList<TProduto>;
 var
   FDConexao: TFDConnection;
   TmpDataset: TDataSet;
   Produto: TProduto;
+  StrWhere: string;
 begin
   Result := TObjectList<TProduto>.Create;
 
   FDConexao := TFDConnection.Create(nil);
   try
+    if ALikeDescricao.Trim.IsEmpty then
+      StrWhere := ''
+    else
+      StrWhere := 'where descricao like ''%' + ALikeDescricao + '%''';
+
     FDConexao.ConnectionDefName := NOME_CONEXAO_FB;
-    FDConexao.ExecSQL('select * from produtos', TmpDataset);
+    FDConexao.ExecSQL('select * from produtos ' + StrWhere + ' order by id', TmpDataset);
 
     if not TmpDataset.IsEmpty then
     begin
@@ -103,11 +111,11 @@ begin
       while not TmpDataset.Eof do
       begin
         Produto := TProduto.Create;
-        Produto.Id := TmpDataset.FieldByName('ID').AsInteger;
-        Produto.Gtin :=  TmpDataset.FieldByName('GTIN').AsString;
-        Produto.Descricao := TmpDataset.FieldByName('DESCRICAO').AsString;
-        Produto.ValorVenda := TmpDataset.FieldByName('VL_VENDA').AsCurrency;
-        Produto.Unidade := TmpDataset.FieldByName('UN').AsString;
+        Produto.Id          := TmpDataset.FieldByName('ID').AsInteger;
+        Produto.Gtin        := TmpDataset.FieldByName('GTIN').AsString;
+        Produto.Descricao   := TmpDataset.FieldByName('DESCRICAO').AsString;
+        Produto.ValorVenda  := TmpDataset.FieldByName('VL_VENDA').AsCurrency;
+        Produto.Unidade     := TmpDataset.FieldByName('UN').AsString;
         Produto.DataCriacao := TmpDataset.FieldByName('DT_CRIACAO').AsDateTime;
 
         Result.Add(Produto);
@@ -164,6 +172,7 @@ end;
 class procedure TProdutoService.Update(const AId: Integer; const AProduto: TProduto);
 var
   FDConexao: TFDConnection;
+  CountAtu: Integer;
 
 const
   SQL_UPDATE: string =
@@ -183,7 +192,7 @@ begin
   FDConexao := TFDConnection.Create(nil);
   try
     FDConexao.ConnectionDefName := NOME_CONEXAO_FB;
-    FDConexao.ExecSQL(SQL_UPDATE,
+    CountAtu := FDConexao.ExecSQL(SQL_UPDATE,
       [
         Aproduto.Gtin,
         Aproduto.Descricao,
@@ -199,6 +208,9 @@ begin
         ftInteger
       ]
     );
+
+    if CountAtu <= 0 then
+      raise Exception.Create('Nenhum produto foi atualizado');
   finally
     FDConexao.Free;
   end;

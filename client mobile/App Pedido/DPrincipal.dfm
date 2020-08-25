@@ -1,7 +1,7 @@
 object DtmPrincipal: TDtmPrincipal
   OldCreateOrder = False
-  Height = 513
-  Width = 757
+  Height = 363
+  Width = 551
   object FDConnection1: TFDConnection
     Params.Strings = (
       'Database=C:\Users\regys\Documents\AppPedidos.sqlite'
@@ -10,7 +10,7 @@ object DtmPrincipal: TDtmPrincipal
     LoginPrompt = False
     AfterConnect = FDConnection1AfterConnect
     BeforeConnect = FDConnection1BeforeConnect
-    Left = 72
+    Left = 82
     Top = 64
   end
   object tmpProdutos: TFDMemTable
@@ -23,8 +23,8 @@ object DtmPrincipal: TDtmPrincipal
     UpdateOptions.AssignedValues = [uvCheckRequired, uvAutoCommitUpdates]
     UpdateOptions.CheckRequired = False
     UpdateOptions.AutoCommitUpdates = True
-    Left = 102
-    Top = 195
+    Left = 77
+    Top = 155
     object tmpProdutosid: TIntegerField
       FieldName = 'id'
     end
@@ -56,8 +56,8 @@ object DtmPrincipal: TDtmPrincipal
     UpdateOptions.AssignedValues = [uvCheckRequired, uvAutoCommitUpdates]
     UpdateOptions.CheckRequired = False
     UpdateOptions.AutoCommitUpdates = True
-    Left = 102
-    Top = 241
+    Left = 147
+    Top = 156
     object tmpClientesid: TIntegerField
       FieldName = 'id'
     end
@@ -111,8 +111,8 @@ object DtmPrincipal: TDtmPrincipal
     Connection = FDConnection1
     SQL.Strings = (
       'select * from clientes')
-    Left = 178
-    Top = 110
+    Left = 253
+    Top = 65
     object qryClientesid: TIntegerField
       FieldName = 'id'
       Origin = 'id'
@@ -128,5 +128,24 @@ object DtmPrincipal: TDtmPrincipal
       Origin = 'cpf'
       Size = 15
     end
+  end
+  object FDGUIxLoginDialog1: TFDGUIxLoginDialog
+    Provider = 'FMX'
+    Left = 410
+    Top = 40
+  end
+  object FDGUIxWaitCursor1: TFDGUIxWaitCursor
+    Provider = 'FMX'
+    Left = 410
+    Top = 90
+  end
+  object FDGUIxErrorDialog1: TFDGUIxErrorDialog
+    Provider = 'FMX'
+    Left = 410
+    Top = 140
+  end
+  object FDPhysSQLiteDriverLink1: TFDPhysSQLiteDriverLink
+    Left = 410
+    Top = 190
   end
 end

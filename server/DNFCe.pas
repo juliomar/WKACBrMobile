@@ -3,8 +3,10 @@ unit DNFCe;
 interface
 
 uses
+  UNFCeClass,
+
   System.SysUtils, System.Classes, ACBrNFeDANFEClass, ACBrDANFCeFortesFr,
-  ACBrBase, ACBrDFe, ACBrNFe, UNFCeClass, ACBrDFeReport, ACBrDFeDANFeReport,
+  ACBrBase, ACBrDFe, ACBrNFe, ACBrDFeReport, ACBrDFeDANFeReport,
   ACBrPosPrinter, ACBrNFeDANFeESCPOS;
 
 type
@@ -104,7 +106,7 @@ begin
   ACBrNFe1.Configuracoes.Geral.Salvar       := True;
   ACBrNFe1.Configuracoes.Geral.VersaoDF     := TpcnVersaoDF.ve400;
   ACBrNFe1.Configuracoes.Geral.VersaoQRCode := TpcnVersaoQrCode.veqr200;
-  ACBrNFe1.Configuracoes.Geral.FormaEmissao := teNormal;
+  ACBrNFe1.Configuracoes.Geral.FormaEmissao := TpcnTipoEmissao.teNormal;
 
   // autenticação e assinatura seguras
   ACBrNFe1.Configuracoes.Geral.SSLLib := TSSLLib.libWinCrypt;
@@ -113,7 +115,7 @@ begin
   // configurações de timezone
   ACBrNFe1.Configuracoes.WebServices.TimeZoneConf.ModoDeteccao := TTimeZoneModoDeteccao.tzSistema;
 
-  // propriedades para melhorar a aparência dos retornos de validaçã dos schemas
+  // propriedades para melhorar a aparência dos retornos de validação dos schemas
   // %TAGNIVEL%  : Representa o Nivel da TAG; ex: <transp><vol><lacres>
   // %TAG%       : Representa a TAG; ex: <nLacre>
   // %ID%        : Representa a ID da TAG; ex X34
@@ -123,16 +125,23 @@ begin
   ACBrNFe1.Configuracoes.Geral.FormatoAlerta    := '[ %TAGNIVEL% %TAG% ] %DESCRICAO% - %MSG%';
 
   // certificado
-  ACBrNFe1.Configuracoes.Certificados.Senha := '1234566';
-  ACBrNFe1.Configuracoes.Certificados.ArquivoPFX  := PathApp + 'certificado.pfx';
+  ACBrNFe1.Configuracoes.Certificados.Senha         := '1234566';
+  ACBrNFe1.Configuracoes.Certificados.ArquivoPFX    := PathApp + 'certificado.pfx';
   //ACBrNFe1.Configuracoes.Certificados.NumeroSerie := '';
-  //ACBrNFe1.Configuracoes.Certificados.DadosPFX := '';
+  //ACBrNFe1.Configuracoes.Certificados.DadosPFX    := '';
 
   // configurações do webservice
   ACBrNFe1.Configuracoes.WebServices.UF         := 'AM';
   ACBrNFe1.Configuracoes.WebServices.Salvar     := True;
   ACBrNFe1.Configuracoes.WebServices.Visualizar := False;
   ACBrNFe1.Configuracoes.WebServices.Ambiente   := taHomologacao;
+
+  // interessante deixar configuravel para nf-e, para nfc-e somente timeout, os outros não são relevantes
+  ACBrNFe1.Configuracoes.WebServices.TimeOut                  := 18000;  // tempo limite de espera pelo webservice
+  ACBrNFe1.Configuracoes.WebServices.AguardarConsultaRet      := 5000;   // tempo padrão que vai aguardar para consultar após enviar a NF-e
+  ACBrNFe1.Configuracoes.WebServices.IntervaloTentativas      := 3000;   // Intervalo entre as tentativas de envio
+  ACBrNFe1.Configuracoes.WebServices.Tentativas               := 10;     // quantidade de tentativas de envio
+  ACBrNFe1.Configuracoes.WebServices.AjustaAguardaConsultaRet := True;   // ajustar "AguardarConsultaRet" com o valor retornado pelo webservice
 
   // proxy de acesso
   ACBrNFe1.Configuracoes.WebServices.ProxyHost := '';
@@ -141,8 +150,8 @@ begin
   ACBrNFe1.Configuracoes.WebServices.ProxyPass := '';
 
   ACBrNFe1.DANFE.PathPDF := PathPDF;
-  ACBrNFe1.DANFE.Sistema := 'nome sistema';
   ACBrNFe1.DANFE.Logo    := '';
+  ACBrNFe1.DANFE.Sistema := 'nome sistema';
   ACBrNFe1.DANFE.Site    := 'https://regys.com.br';
   ACBrNFe1.DANFE.Email   := 'regys.silveira@gmail.com';
 end;
@@ -150,19 +159,19 @@ end;
 function TdtmNFCe.Enviar: string;
 var
   PathTempImpressao: string;
-//var
-  //StatusNFCe: Integer;
-  //StrErros: string;
-  //NumeroLote: string;
+var
+  StatusNFCe: Integer;
+  StrErros: string;
+  NumeroLote: string;
 begin
   if ACBrNFe1.NotasFiscais.Count <= 0 then
     raise Exception.Create('nenhuma nota fiscal informada');
 
   Self.ConfigurarNFe;
 
-//  // assinar omitido para facilitar o uso no curso
-//  ACBrNFe1.NotasFiscais.Assinar;
-//
+  // assinar omitido para facilitar o uso no curso
+  ACBrNFe1.NotasFiscais.Assinar;
+
 //  // validar
 //  try
 //    ACBrNFe1.NotasFiscais.Validar;
@@ -184,7 +193,6 @@ begin
 //  if not ACBrNFe1.NotasFiscais.ValidarRegrasdeNegocios(StrErros) then
 //    raise EFilerError.Create('ERRO REGRAS DE NEGOCIO: ' + StrErros);
 
-
   PathTempImpressao := ExtractFilePath(ParamStr(0)) + '\impressao\';
   ForceDirectories(PathTempImpressao);
 
@@ -194,6 +202,9 @@ begin
   // na vida real o XML deverá ser gravado no banco de dados ou em pasta de
   // arquivamento e mantido por 5 anos
   ACBrNFe1.NotasFiscais[0].GravarXML(PathNotaFiscalExemplo);
+
+  // para gravar no banco ler a propriedade
+  //ACBrNFe1.NotasFiscais[0].XML
 
   // opcional imprimir diretamente do servidor, para isso é preciso ter
   // confiurado o impressor
@@ -211,7 +222,8 @@ begin
 //  begin
 //    StatusNFCe := ACBrNFe1.WebServices.Enviar.cStat;
 //
-//    if ValorInRange(StatusNFCe, [100, 110, 150, 205, 301, 302]) then
+//    //if ACBrNFe1.NotasFiscais[0].Confirmada then  ou
+//    if ACBrNFe1.CstatConfirmada(StatusNFCe) then
 //    begin
 //      Result := ACBrNFe1.WebServices.Enviar.cStat.ToString + ' - ' +
 //                ACBrNFe1.WebServices.Enviar.xMotivo;
@@ -301,6 +313,18 @@ begin
   ONFe.Dest.CNPJCPF := ANFCe.cpf;
   ONFe.Dest.xNome   := ANFCe.Nome;
 
+  ONFe.Dest.EnderDest.fone    := '(11)2222.4444';
+  ONFe.Dest.EnderDest.xLgr    := 'ENDERECO TESTE';
+  ONFe.Dest.EnderDest.nro     := '1';
+  ONFe.Dest.EnderDest.xCpl    := '';
+  ONFe.Dest.EnderDest.xBairro := 'BAIRRO';
+  ONFe.Dest.EnderDest.xMun    := 'MANAUS';
+  ONFe.Dest.EnderDest.cMun    := 1302603;
+  ONFe.Dest.EnderDest.UF      := CUFtoUF(13);
+  ONFe.Dest.EnderDest.CEP     := 11222333;
+  ONFe.Dest.EnderDest.cPais   := 1058;
+  ONFe.Dest.EnderDest.xPais   := 'BRASIL';
+
   ValorTotalNF := 0.00;
   I := 0;
   for NFCeItem in ANFCe.Itens do
@@ -312,7 +336,7 @@ begin
     OItemNota.Prod.cProd    := NFCeItem.Id.ToString;
     OItemNota.Prod.xProd    := NFCeItem.Descricao;
     OItemNota.Prod.NCM      := '10061092';
-    OItemNota.Prod.CFOP     := '5405';
+    OItemNota.Prod.CFOP     := '5102';
     OItemNota.Prod.CEST     := '';
 
     OItemNota.Prod.cEAN     := 'SEM GTIN';
@@ -337,7 +361,7 @@ begin
     OItemNota.Imposto.ICMS.orig := TpcnOrigemMercadoria.oeNacional;
 
     // ICMS ********************************************************
-    OItemNota.Imposto.ICMS.CSOSN       := TpcnCSOSNIcms.csosn500;
+    OItemNota.Imposto.ICMS.CSOSN       := TpcnCSOSNIcms.csosn102;
     OItemNota.Imposto.ICMS.pCredSN     := 0.00;
     OItemNota.Imposto.ICMS.vCredICMSSN := 0.00;
 
@@ -405,6 +429,14 @@ begin
 
     PathTempImpressao     := ExtractFilePath(ParamStr(0)) + 'arquivoescpos.txt';
     ACBrPosPrinter1.Porta := PathTempImpressao;
+
+    // Porta pode ser:
+    // \\192.168.1.1 - endereço ip da impressora
+    // \\nomecomputador\nomecompartilhamento - caminho do compartilhamento
+    // COMx - Porta COM
+    // LPTx - Porta LPT
+    // c:\diretorio\nomearquio.txt - gerando para arquivo
+    // RAW:nome da impressora - nome da impressora no windows   "RAW:MP-45200 TH"
 
     ACBrNFe1.NotasFiscais.Clear;
     ACBrNFe1.NotasFiscais.LoadFromFile(PathNotaFiscalExemplo);

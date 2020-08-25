@@ -17,7 +17,9 @@ uses
   UNFCeClass in '..\comum\UNFCeClass.pas',
   DNFCe in 'DNFCe.pas' {DtmNFCe: TDataModule},
   UBaseController in 'UBaseController.pas',
-  AuthHandlerU in 'AuthHandlerU.pas';
+  AuthHandlerU in 'AuthHandlerU.pas',
+  UPoolConnection in 'UPoolConnection.pas',
+  DSAT in 'DSAT.pas' {DtmSAT: TDataModule};
 
 {$R *.res}
 
@@ -103,7 +105,10 @@ begin
 end;
 
 begin
-  ReportMemoryLeaksOnShutdown := True;
+  ConfigurarPoolConnection;
+
+  ReportMemoryLeaksOnShutdown := DebugHook <> 0;
+
   IsMultiThread := True;
   try
     if WebRequestHandler <> nil then
